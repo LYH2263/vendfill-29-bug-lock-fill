@@ -41,7 +41,12 @@ def set_lane_blocked(db: Session, lane_id: int, blocked: bool) -> Lane:
         lane.blocked = blocked
         order = latest_order(db, lane.location_id)
         if order is not None:
-            pass
+            # 按货道表当前状态整单重算：每道只看自己的旗标，未封锁道仍按缺口补，
+            # 不会被邻道封锁带着清零；只动最新单，更早的单保持原文。
+            lanes = db.scalars(select(Lane).where(Lane.location_id == lane.location_id)
+                               .order_by(Lane.slot_no)).all()
+            summary = summarize(build_fill_lines([lane_payload(l) for l in lanes]))
+            order.lines_json = json.dumps(summary, ensure_ascii=False)
         db.commit()
     except Exception:
         db.rollback()
