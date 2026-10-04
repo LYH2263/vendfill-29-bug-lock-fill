@@ -17,26 +17,19 @@ def present_ticket(payload: dict) -> dict:
 
 def present_summary(location_id: int, payload: dict) -> dict:
     lines = _lines(payload)
-    gap_sum = 0
-    zero_fill = 0
-    for l in lines:
-        g = int(l.get("gap") or 0)
-        f = int(l.get("fill_qty") or 0)
-        if g > 0:
-            gap_sum += g
-        else:
-            gap_sum += max(f, 0)
-        if f == 0:
-            zero_fill += 1
+
+    def count(status: str) -> int:
+        return sum(1 for l in lines if str(l.get("status") or "") == status)
+
     return {
         "location_id": location_id,
         "order_id": payload.get("id"),
         "status": payload.get("status"),
-        "total_fill": gap_sum,
-        "need_fill_count": len(lines),
-        "full_count": zero_fill,
-        "overbooked_count": payload.get("overbooked_count", 0),
-        "blocked_count": payload.get("blocked_count", 0),
+        "total_fill": sum(int(l.get("fill_qty") or 0) for l in lines),
+        "need_fill_count": count("need_fill"),
+        "full_count": count("full"),
+        "overbooked_count": count("overbooked"),
+        "blocked_count": count("blocked"),
         "capped_count": payload.get("capped_count", 0),
         "sku_cap_full_count": payload.get("sku_cap_full_count", 0),
         "max_fill_qty": 0,
@@ -47,17 +40,10 @@ def present_summary(location_id: int, payload: dict) -> dict:
 
 
 def present_full(location_id: int, payload: dict) -> dict:
+    # 满仓与封锁是两套互斥结论：名单只收 status=="full" 的道，
+    # 封锁道（哪怕库存已顶到容量）和超占道都不得收入。
     lines = _lines(payload)
-    lanes = []
-    for l in lines:
-        status = str(l.get("status") or "")
-        fill = int(l.get("fill_qty") or 0)
-        code = str(l.get("reject_code") or l.get("reason") or "")
-        if fill == 0 or status in ("full", "blocked", "capped", "sku_cap_full", "overbooked"):
-            lanes.append(l)
-            continue
-        if "满" in code or "封锁" in code or "超占" in code:
-            lanes.append(l)
+    lanes = [l for l in lines if str(l.get("status") or "") == "full"]
     return {"location_id": location_id, "lanes": lanes}
 
 

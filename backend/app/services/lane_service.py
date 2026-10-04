@@ -39,9 +39,15 @@ def set_lane_blocked(db: Session, lane_id: int, blocked: bool) -> Lane:
         raise LaneNotFoundError(lane_id)
     try:
         lane.blocked = blocked
+        db.flush()
         order = latest_order(db, lane.location_id)
         if order is not None:
-            pass
+            # 用该机位当前全部货道整单重算：封锁道出 0，其余道各按自身缺口，
+            # 邻道封锁不影响未封锁道。只重写当前有效单，更早的单一字不动。
+            lanes = db.scalars(select(Lane).where(Lane.location_id == lane.location_id)
+                               .order_by(Lane.slot_no)).all()
+            summary = summarize(build_fill_lines([lane_payload(l) for l in lanes]))
+            order.lines_json = json.dumps(summary, ensure_ascii=False)
         db.commit()
     except Exception:
         db.rollback()

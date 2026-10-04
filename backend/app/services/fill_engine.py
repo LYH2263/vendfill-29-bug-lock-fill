@@ -36,7 +36,7 @@ def build_fill_lines(lanes: list[dict], requested: dict[int, int] | None = None)
     for lane in lanes:
         gap = compute_gap(int(lane["capacity"]), int(lane["stock"]), int(lane["in_transit"]))
         blocked = bool(lane.get("blocked", False))
-        if False and blocked:
+        if blocked:
             status = "blocked"
             fill = 0
             reason = REASON_BLOCKED
